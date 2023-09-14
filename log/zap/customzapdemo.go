@@ -7,22 +7,8 @@ import (
 	"os"
 )
 
-type Level = zapcore.Level
-type Option = zap.Option
-type Field = zap.Field
-
 // 创建默认logger对象 方便外部直接调用包方法时使用
 var logger *Logger = New(os.Stderr, InfoLevel)
-
-// 声明日志级别常量
-const (
-	DebugLevel = zapcore.DebugLevel
-	InfoLevel  = zapcore.InfoLevel
-	WarnLevel  = zapcore.WarnLevel
-	ErrorLevel = zapcore.ErrorLevel
-	PanicLevel = zapcore.PanicLevel
-	FatalLevel = zapcore.FatalLevel
-)
 
 // 定义日志结构体
 type Logger struct {

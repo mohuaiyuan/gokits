@@ -2,6 +2,8 @@ package log
 
 import "go.uber.org/zap"
 
+type Field = zap.Field
+
 var (
 	Skip        = zap.Skip
 	Binary      = zap.Binary
