@@ -6,8 +6,6 @@ import (
 	"io"
 )
 
-type LevelEnablerFunc func(Level) bool
-
 type TeeOption struct {
 	Out io.Writer
 	LevelEnablerFunc

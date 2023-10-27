@@ -1,18 +1,22 @@
 package log
 
 import (
+	rotatelogs "github.com/lestrrat-go/file-rotatelogs"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"gopkg.in/natefinch/lumberjack.v2"
 	"io"
+	"os"
 	"strings"
 	"time"
-
-	rotatelogs "github.com/lestrrat-go/file-rotatelogs"
-	"gopkg.in/natefinch/lumberjack.v2"
 )
 
-type RotateConfig struct {
+type Config struct {
 	// 共用配置
-	Filename string // 完整文件名
-	MaxAge   int    // 保留旧日志文件的最大天数
+	RotateType string           // 轮转方式
+	Filename   string           // 完整文件名
+	MaxAge     int              // 保留旧日志文件的最大天数
+	Lef        LevelEnablerFunc // 日志级别启用函数
 
 	// 按时间轮转配置
 	RotationTime time.Duration // 日志文件轮转时间
@@ -24,31 +28,30 @@ type RotateConfig struct {
 	LocalTime  bool // 是否使用本地时间，默认 UTC 时间
 }
 
-// NewProductionRotateByTime 创建按时间轮转的 io.Writer
-func NewProductionRotateByTime(filename string) io.Writer {
-	return NewRotateByTime(NewProductionRotateConfig(filename))
-}
-
-// NewProductionRotateBySize 创建按大小轮转的 io.Writer
-func NewProductionRotateBySize(filename string) io.Writer {
-	return NewRotateBySize(NewProductionRotateConfig(filename))
-}
-
-func NewProductionRotateConfig(filename string) *RotateConfig {
-	return &RotateConfig{
-		Filename: filename,
-		MaxAge:   30, // 日志保留 30 天
-
-		RotationTime: time.Hour * 24, // 24 小时轮转一次
-
-		MaxSize:    100, // 100M
-		MaxBackups: 100,
-		Compress:   true,
-		LocalTime:  false,
+// NewWithRotate 创建日志对象按轮转方式 io.Writer
+func NewWithRotate(config *Config, opts ...Option) *Logger {
+	cfg := zap.NewProductionEncoderConfig()
+	cfg.EncodeTime = func(t time.Time, encoder zapcore.PrimitiveArrayEncoder) {
+		encoder.AppendString(t.Format("2006-01-02 15:04:05"))
 	}
+	lv := zap.LevelEnablerFunc(config.Lef)
+	var writer io.Writer
+	if config.RotateType == "byTime" {
+		writer = NewRotateByTime(config)
+	} else {
+		writer = NewRotateBySize(config)
+	}
+
+	core := zapcore.NewTee(
+		zapcore.NewCore(zapcore.NewConsoleEncoder(cfg), zapcore.AddSync(os.Stdout), lv),
+		zapcore.NewCore(zapcore.NewJSONEncoder(cfg), zapcore.AddSync(writer), lv),
+	)
+
+	return &Logger{log: zap.New(core, opts...)}
+
 }
 
-func NewRotateByTime(cfg *RotateConfig) io.Writer {
+func NewRotateByTime(cfg *Config) io.Writer {
 	opts := []rotatelogs.Option{
 		rotatelogs.WithMaxAge(time.Duration(cfg.MaxAge) * time.Hour * 24),
 		rotatelogs.WithRotationTime(cfg.RotationTime),
@@ -58,20 +61,17 @@ func NewRotateByTime(cfg *RotateConfig) io.Writer {
 		rotatelogs.WithClock(rotatelogs.UTC)
 	}
 	filename := strings.SplitN(cfg.Filename, ".", 2)
-	l, _ := rotatelogs.New(
-		filename[0]+".%Y-%m-%d-%H-%M-%S."+filename[1],
-		opts...,
-	)
-	return l
+	w, _ := rotatelogs.New(filename[0]+"_%Y%m%d."+filename[1], opts...)
+	return w
 }
 
-func NewRotateBySize(cfg *RotateConfig) io.Writer {
-	return &lumberjack.Logger{
+func NewRotateBySize(cfg *Config) io.Writer {
+	return zapcore.AddSync(&lumberjack.Logger{
 		Filename:   cfg.Filename,
 		MaxSize:    cfg.MaxSize,
 		MaxAge:     cfg.MaxAge,
 		MaxBackups: cfg.MaxBackups,
 		LocalTime:  cfg.LocalTime,
 		Compress:   cfg.Compress,
-	}
+	})
 }

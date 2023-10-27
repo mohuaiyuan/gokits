@@ -1,0 +1,10 @@
+log:
+  rotateType: "byTime"
+  filename: "logs/test.log"
+  maxAge: 20
+  level: "info"
+  rotateTime: 1
+  maxSize: 10
+  maxBackups: 30
+  compress: true
+  localTime: false
